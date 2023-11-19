@@ -1,43 +1,82 @@
 'use strict';
 
-// Content script file will run in the context of web page.
-// With content script you can manipulate the web pages using
-// Document Object Model (DOM).
-// You can also pass information to the parent extension.
+class AutoFill {
+    constructor() {
+        chrome.storage.local.get(['firstName', 'lastName', 'resumeFile'], (data) => {
+            this.firstName = data.firstName;
+            this.lastName = data.lastName;
+            this.fullName = `${data.firstName} ${data.lastName}`;
+            this.resumeFileData = data.resumeFile; // This is expected to be a data URL
+        });
+    }
 
-// We execute this script by making an entry in manifest.json file
-// under `content_scripts` property
+    fillForms() {
+        console.log("Starting to autofill forms");
+        // Wait for the data to be loaded before processing forms
+        setTimeout(() => {
+            const forms = document.forms;
+            Array.from(forms).forEach(form => this.fillForm(form));
+        }, 1000); // Adjust timeout as needed
+    }
 
-// For more information on Content Scripts,
-// See https://developer.chrome.com/extensions/content_scripts
+    fillForm(form) {
+        console.log("Filling form:", form);
+        Array.from(form.elements).forEach(element => {
+            if (element.type === "text" || element.type === "email" || element.type === "textarea") {
+                this.fillTextElement(element);
+            } else if (element.type === "file") {
+                this.fillFileInput(element);
+            }
+        });
+    }
 
-// Log `title` of current active web page
-const pageTitle = document.head.getElementsByTagName('title')[0].innerHTML;
-console.log(
-  `Page title is: '${pageTitle}' - evaluated by Chrome extension's 'contentScript.js' file`
-);
+    fillTextElement(element) {
+        const label = this.getLabelForElement(element).toLowerCase();
+        if (label.includes('first name') || label.includes('given name')) {
+            element.value = this.firstName;
+            console.log(`Filled ${element.name} with ${this.firstName}`);
+        } else if (label.includes('last name') || label.includes('surname')) {
+            element.value = this.lastName;
+            console.log(`Filled ${element.name} with ${this.lastName}`);
+        } else if (label.includes('name') || label.includes('full name')) {
+            element.value = this.fullName;
+            console.log(`Filled ${element.name} with ${this.fullName}`);
+        }
+    }
 
-// Communicate with background file by sending a message
-chrome.runtime.sendMessage(
-  {
-    type: 'GREETINGS',
-    payload: {
-      message: 'Hello, my name is Con. I am from ContentScript.',
-    },
-  },
-  response => {
-    console.log(response.message);
-  }
-);
+    fillFileInput(element) {
+        if (this.resumeFileData && element.id === "resumeUploadInputId") { // Replace with your actual file input ID
+            const fileData = this.resumeFileData;
+            const blob = this.dataURLtoBlob(fileData);
+            const fileName = "resume.pdf"; // Modify to get the actual file name if needed
 
-// Listen for message
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'COUNT') {
-    console.log(`Current count is ${request.payload.count}`);
-  }
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(new File([blob], fileName, { type: 'application/pdf' }));
+            element.files = dataTransfer.files;
+            console.log(`Uploaded resume file to ${element.name}`);
+        }
+    }
 
-  // Send an empty response
-  // See https://github.com/mozilla/webextension-polyfill/issues/130#issuecomment-531531890
-  sendResponse({});
-  return true;
-});
+    dataURLtoBlob(dataurl) {
+        var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], {type:mime});
+    }
+
+    getLabelForElement(element) {
+        const labels = document.getElementsByTagName('label');
+        for (const label of labels) {
+            if (label.htmlFor === element.id) {
+                return label.textContent;
+            }
+        }
+        return element.name;
+    }
+}
+
+// Example Usage:
+const autoFiller = new AutoFill();
+autoFiller.fillForms();

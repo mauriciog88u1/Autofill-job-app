@@ -5,17 +5,31 @@
 // For more information on background script,
 // See https://developer.chrome.com/extensions/background_pages
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'GREETINGS') {
-    const message = `Hi ${
-      sender.tab ? 'Con' : 'Pop'
-    }, my name is Bac. I am from Background. It's great to hear from you.`;
+// background.js
 
-    // Log message coming from the `request` parameter
-    console.log(request.payload.message);
-    // Send a response message
-    sendResponse({
-      message,
-    });
-  }
+
+console.log("At least reached background.js");
+
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    console.log("Reached background.js");
+
+    if (request.from === 'popup') {
+        if (request.subject === 'injectContentScript') {
+            console.log("Injecting content script");
+
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tabs[0].id },
+                    files: ['contentScript.js']
+                }, () => {
+                    console.log("Content script injected");
+                });
+            });
+        } else {
+            console.log("Received an unrecognized request");
+        }
+    }
+
+    return true; 
 });
+
